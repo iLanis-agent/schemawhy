@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchemaWhy app - why does this JSON fail its schema?</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#071a1f;color:#e1f6fa;line-height:1.5}
+.wrap{max-width:900px;margin:0 auto;padding:28px 16px 50px}
+h1{font-size:28px}h1 span{color:#22d3ee}.sub{color:#8cbac4;margin:6px 0 14px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:700px){.cols{grid-template-columns:1fr}}
+textarea{width:100%;height:230px;background:#0f2a31;color:#e1f6fa;border:1px solid #23535f;border-radius:10px;padding:11px;font:13.5px ui-monospace,Menlo,Consolas,monospace}
+label{display:block;font-size:13px;color:#8cbac4;margin:12px 0 4px}
+.pre button{background:#10303a;color:#a5f3fc;border:1px solid #23535f;border-radius:20px;padding:6px 12px;margin:0 6px 6px 0;cursor:pointer;font-size:13px}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:14px}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid #16404a;vertical-align:top}th{color:#8cbac4;font-weight:600}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;color:#a5f3fc}.err{color:#fca5a5}.ok{color:#86efac;margin-top:12px;font-weight:600}
+.foot{color:#6d99a3;font-size:13px;margin-top:18px}a{color:#22d3ee}
+</style></head><body><div class="wrap">
+<h1>Schema<span>Why</span></h1>
+<div class="sub">Paste a JSON Schema (draft 2020-12) and a JSON document. Every failure comes with its path, the keyword that caused it, and a plain reason.</div>
+<div class="pre" id="pre"></div>
+<div class="cols"><div><label for="sc">Schema</label><textarea id="sc" spellcheck="false"></textarea></div><div><label for="in">Instance</label><textarea id="in" spellcheck="false"></textarea></div></div>
+<div id="out"></div>
+<div class="foot">Covers the validation keywords: type, enum, const, number, string, array and object limits, properties, patternProperties, additionalProperties, items, allOf, anyOf, oneOf, not, if/then/else. Not covered: $ref, $defs, contains, prefixItems, dependent*, unevaluated*, and format (which is only an annotation by default). Patterns use JavaScript regex syntax, which can differ from other languages. Runs in your browser; nothing is uploaded.</div>
+<div class="foot">Part of the <a href="https://ilanis-agent.github.io/app-factory/">app factory</a>. Source: <a href="https://github.com/iLanis-agent/schemawhy">GitHub</a>.</div>
+</div>
+<script>
+(function (root) {
+  'use strict';
+  // JSON Schema 2020-12 validation vocabulary subset (json-schema.org/draft/2020-12/json-schema-validation, section 6).
+  // Not covered: $ref, $defs, unevaluated*, contains, prefixItems/dependent*, format assertion.
+  function typeOf(v) { return v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v; }
+  function isType(v, t) {
+    var k = typeOf(v);
+    if (t === 'integer') return k === 'number' && isFinite(v) && Math.floor(v) === v;
+    return k === t;
+  }
+  function eq(a, b) {
+    var ta = typeOf(a), tb = typeOf(b); if (ta !== tb) return false;
+    if (ta === 'array') return a.length === b.length && a.every(function (x, i) { return eq(x, b[i]); });
+    if (ta === 'object') { var ka = Object.keys(a), kb = Object.keys(b); return ka.length === kb.length && ka.every(function (k) { return Object.prototype.hasOwnProperty.call(b, k) && eq(a[k], b[k]); }); }
+    return a === b;
+  }
+  function esc(k) { return String(k).replace(/~/g, '~0').replace(/\//g, '~1'); }
+  function show(v) { var s = JSON.stringify(v); return s && s.length > 60 ? s.slice(0, 57) + '...' : s; }
+  function multiple(x, m) { return Number.isInteger(x / m); }
+  function validate(schema, inst, path, errs) {
+    if (schema === true || schema === undefined) return;
+    if (schema === false) { errs.push({ path: path, keyword: 'false', message: 'The schema is false: nothing is valid here.' }); return; }
+    if (typeOf(schema) !== 'object') return;
+    var t = typeOf(inst), s = schema, ok;
+    function add(kw, msg) { errs.push({ path: path, keyword: kw, message: msg }); }
+    if ('type' in s) { var ts = [].concat(s.type); if (!ts.some(function (x) { return isType(inst, x); })) add('type', show(inst) + ' is a ' + (isType(inst, 'integer') ? 'integer' : t) + ', schema wants ' + ts.join(' or ') + '.'); }
+    if ('enum' in s && !s.enum.some(function (x) { return eq(x, inst); })) add('enum', show(inst) + ' is not one of ' + show(s.enum) + '.');
+    if ('const' in s && !eq(s.const, inst)) add('const', show(inst) + ' is not ' + show(s.const) + '.');
+    if (t === 'number') {
+      if ('multipleOf' in s && !multiple(inst, s.multipleOf)) add('multipleOf', inst + ' is not a multiple of ' + s.multipleOf + '.');
+      if ('maximum' in s && inst > s.maximum) add('maximum', inst + ' is above the maximum ' + s.maximum + '.');
+      if ('exclusiveMaximum' in s && inst >= s.exclusiveMaximum) add('exclusiveMaximum', inst + ' must be below ' + s.exclusiveMaximum + '.');
+      if ('minimum' in s && inst < s.minimum) add('minimum', inst + ' is below the minimum ' + s.minimum + '.');
+      if ('exclusiveMinimum' in s && inst <= s.exclusiveMinimum) add('exclusiveMinimum', inst + ' must be above ' + s.exclusiveMinimum + '.');
+    }
+    if (t === 'string') {
+      var len = Array.from(inst).length;
+      if ('maxLength' in s && len > s.maxLength) add('maxLength', 'Length ' + len + ' is over ' + s.maxLength + ' (counted in characters, not UTF-16 units).');
+      if ('minLength' in s && len < s.minLength) add('minLength', 'Length ' + len + ' is under ' + s.minLength + '.');
+      if ('pattern' in s) { var re = null; try { re = new RegExp(s.pattern, 'u'); } catch (e) { } if (re && !re.test(inst)) add('pattern', show(inst) + ' does not match /' + s.pattern + '/ (patterns are unanchored: they match anywhere).'); }
+    }
+    if (t === 'array') {
+      if ('maxItems' in s && inst.length > s.maxItems) add('maxItems', inst.length + ' items, at most ' + s.maxItems + '.');
+      if ('minItems' in s && inst.length < s.minItems) add('minItems', inst.length + ' items, at least ' + s.minItems + ' needed.');
+      if (s.uniqueItems === true) { var dup = false; for (var i = 0; i < inst.length && !dup; i++) for (var j = i + 1; j < inst.length; j++) if (eq(inst[i], inst[j])) { dup = true; add('uniqueItems', 'Items ' + i + ' and ' + j + ' are equal (1 and 1.0 are equal; true and 1 are not).'); break; } }
+      if ('items' in s) inst.forEach(function (x, i) { validate(s.items, x, path + '/' + i, errs); });
+    }
+    if (t === 'object') {
+      var keys = Object.keys(inst);
+      if ('maxProperties' in s && keys.length > s.maxProperties) add('maxProperties', keys.length + ' properties, at most ' + s.maxProperties + '.');
+      if ('minProperties' in s && keys.length < s.minProperties) add('minProperties', keys.length + ' properties, at least ' + s.minProperties + ' needed.');
+      if ('required' in s) s.required.forEach(function (k) { if (!Object.prototype.hasOwnProperty.call(inst, k)) add('required', 'Missing required property "' + k + '".'); });
+      var props = s.properties || {}, pp = s.patternProperties || {};
+      Object.keys(props).forEach(function (k) { if (Object.prototype.hasOwnProperty.call(inst, k)) validate(props[k], inst[k], path + '/' + esc(k), errs); });
+      Object.keys(pp).forEach(function (p) { var re = new RegExp(p, 'u'); keys.forEach(function (k) { if (re.test(k)) validate(pp[p], inst[k], path + '/' + esc(k), errs); }); });
+      if ('additionalProperties' in s) {
+        var res = Object.keys(pp).map(function (p) { return new RegExp(p, 'u'); });
+        var extra = keys.filter(function (k) { return !Object.prototype.hasOwnProperty.call(props, k) && !res.some(function (re) { return re.test(k); }); });
+        if (s.additionalProperties === false) { if (extra.length) add('additionalProperties', 'Unexpected ' + (extra.length > 1 ? 'properties ' : 'property ') + extra.map(function (k) { return '"' + k + '"'; }).join(', ') + '.'); }
+        else extra.forEach(function (k) { validate(s.additionalProperties, inst[k], path + '/' + esc(k), errs); });
+      }
+    }
+    if ('allOf' in s) s.allOf.forEach(function (x) { validate(x, inst, path, errs); });
+    if ('anyOf' in s) { ok = s.anyOf.some(function (x) { var e = []; validate(x, inst, path, e); return !e.length; }); if (!ok) add('anyOf', 'Matches none of the ' + s.anyOf.length + ' anyOf branches.'); }
+    if ('oneOf' in s) { var n = s.oneOf.filter(function (x) { var e = []; validate(x, inst, path, e); return !e.length; }).length; if (n !== 1) add('oneOf', n === 0 ? 'Matches none of the ' + s.oneOf.length + ' oneOf branches.' : 'Matches ' + n + ' oneOf branches, exactly one is allowed.'); }
+    if ('not' in s) { var e2 = []; validate(s.not, inst, path, e2); if (!e2.length) add('not', 'Matches the "not" schema, which must fail.'); }
+    if ('if' in s) { var e3 = []; validate(s.if, inst, path, e3); if (!e3.length) { if ('then' in s) validate(s.then, inst, path, errs); } else if ('else' in s) validate(s.else, inst, path, errs); }
+  }
+  function check(schema, inst) { var errs = []; validate(schema, inst, '', errs); return errs; }
+  var api = { check: check, eq: eq };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.SchemaWhy = api;
+})(typeof window !== 'undefined' ? window : this);
+
+var J=function(o){return JSON.stringify(o,null,1)};
+var P={'Number traps':[J({type:'integer',minimum:0,multipleOf:5}),'-5'],
+'Required vs type':[J({type:'object',required:['id','name'],properties:{id:{type:'integer'},name:{type:'string',minLength:1}},additionalProperties:false}),J({id:'7',nme:'x'})],
+'oneOf overlap':[J({oneOf:[{type:'number'},{type:'integer'}]}),J(3)],
+'Unique items':[J({type:'array',uniqueItems:true}),'[1, 1.0, true, "1"]'],
+'if / then':[J({if:{properties:{country:{const:'US'}},required:['country']},then:{required:['zip']}}),J({country:'US'})],
+'Pattern is unanchored':[J({type:'string',pattern:'[0-9]{3}'}),J('abc1234xyz')]};
+function el(i){return document.getElementById(i)}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+function run(){var out=el('out'),s,x;if(!el('sc').value.trim()&&!el('in').value.trim()){out.innerHTML='';return}
+ try{s=JSON.parse(el('sc').value)}catch(e){out.innerHTML='<div class="err">Schema is not valid JSON: '+esc(e.message)+'</div>';return}
+ try{x=JSON.parse(el('in').value)}catch(e){out.innerHTML='<div class="err">Instance is not valid JSON: '+esc(e.message)+'</div>';return}
+ var errs;try{errs=SchemaWhy.check(s,x)}catch(e){out.innerHTML='<div class="err">Could not evaluate the schema: '+esc(e.message)+'</div>';return}
+ if(!errs.length){out.innerHTML='<div class="ok">Valid. The instance satisfies every keyword this tool checks.</div>';return}
+ out.innerHTML='<div class="err" style="margin-top:12px">'+errs.length+' failure'+(errs.length>1?'s':'')+'</div><table><thead><tr><th>Where</th><th>Keyword</th><th>Why</th></tr></thead><tbody>'+errs.map(function(e){return'<tr><td><code>'+esc(e.path||'(root)')+'</code></td><td><code>'+esc(e.keyword)+'</code></td><td>'+esc(e.message)+'</td></tr>'}).join('')+'</tbody></table>'}
+el('sc').addEventListener('input',run);el('in').addEventListener('input',run);
+var pre=el('pre');Object.keys(P).forEach(function(k){var b=document.createElement('button');b.textContent=k;b.onclick=function(){el('sc').value=P[k][0];el('in').value=P[k][1];run()};pre.appendChild(b)});
+var f=P['Required vs type'];el('sc').value=f[0];el('in').value=f[1];run();
+</script></body></html>
