@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SchemaWhy - why does this JSON fail its schema?</title>
+<meta name="description" content="1.0 is an integer, [1, 1.0] is not unique, oneOf fails when two branches match. Validate JSON against a JSON Schema and see exactly why.">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#071a1f;color:#e1f6fa;line-height:1.6}
+.wrap{max-width:680px;margin:0 auto;padding:48px 20px 60px}.logo{font-size:46px;font-weight:800}.logo span{color:#22d3ee}
+.tag{font-size:19px;margin-top:10px;color:#bde3ea}.cta{display:inline-block;margin-top:26px;background:#22d3ee;color:#071a1f;font-weight:700;padding:14px 30px;border-radius:12px;text-decoration:none}
+h2{font-size:21px;margin:40px 0 10px}li{color:#8cbac4;margin-bottom:8px}ul{margin-left:20px}
+.demo{margin-top:26px;background:#0f2a31;border-radius:14px;padding:18px}.demo b{color:#a5f3fc}
+footer{margin-top:50px;font-size:13px;color:#6d99a3}a{color:#22d3ee}
+</style></head><body><div class="wrap">
+<div class="logo">Schema<span>Why</span></div>
+<div class="tag">"Validation failed" is not an answer. A path and a reason is.</div>
+<a class="cta" href="app.html">Open the app</a>
+<div class="demo"><b>5.0</b> is a valid <b>integer</b>. <b>[1, 1.0]</b> is not unique. <b>oneOf [number, integer]</b> rejects <b>3</b> because both match.</div>
+<h2>What it does</h2>
+<ul><li>Validates a JSON document against a JSON Schema (draft 2020-12 validation keywords) and lists each failure with its path, keyword and reason.</li>
+<li>Handles the traps: integer vs 1.0, true vs 1, unanchored patterns, characters vs UTF-16 length, oneOf overlap, if/then/else.</li>
+<li>Runs in your browser. Nothing is uploaded.</li></ul>
+<h2>How far to trust it</h2>
+<ul><li>Compared with the Python jsonschema library (Draft 2020-12 validator) on 6000 random schema and instance pairs: same failing paths and keywords. Spec sections 6.1 to 6.5 read directly. No $ref, contains, prefixItems or format.</li></ul>
+<footer>Part of the <a href="https://ilanis-agent.github.io/app-factory/">app factory</a>. Source: <a href="https://github.com/iLanis-agent/schemawhy">GitHub</a>.</footer>
+</div></body></html>
